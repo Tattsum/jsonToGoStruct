@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -86,7 +85,7 @@ func main() {
 	}
 
 	// Read the JSON file.
-	data, err := ioutil.ReadFile(*jsonFile)
+	data, err := os.ReadFile(*jsonFile)
 	if err != nil {
 		log.Fatalf("Failed to read the JSON file: %v", err)
 	}
