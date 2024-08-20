@@ -6,37 +6,67 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
+
+	"github.com/iancoleman/strcase"
 )
 
 // Field represents a single field in the Go struct.
-type Field struct {
+type Field[T any] struct {
 	Name string
 	Type string
 	Tag  string
 }
 
 // Struct represents a Go struct.
-type Struct struct {
+type Struct[T any] struct {
 	Name   string
-	Fields []Field
+	Fields []Field[T]
 }
 
 // GenerateStruct generates a Go struct from a JSON object.
-func GenerateStruct(name string, jsonObject map[string]interface{}) Struct {
-	var fields []Field
-	for key, value := range jsonObject {
-		fieldName := ToCamelCase(key)
-		fieldType := guessType(value)
-		fields = append(fields, Field{
+func GenerateStruct(structName string, jsonObject map[string]interface{}) Struct[string] {
+	fields := make([]Field[string], 0, len(jsonObject))
+
+	// キーでソートしてフィールドの順序を一定に保つ
+	keys := make([]string, 0, len(jsonObject))
+	for k := range jsonObject {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		value := jsonObject[key]
+		fieldName := strcase.ToCamel(key)
+		fieldType := getType(value)
+		tag := fmt.Sprintf("`json:\"%s\"`", key)
+
+		fields = append(fields, Field[string]{
 			Name: fieldName,
 			Type: fieldType,
-			Tag:  fmt.Sprintf("`json:\"%s\"`", key),
+			Tag:  tag,
 		})
 	}
-	return Struct{
-		Name:   name,
+
+	return Struct[string]{
+		Name:   structName,
 		Fields: fields,
+	}
+}
+
+func getType(value interface{}) string {
+	switch value.(type) {
+	case float64:
+		return "float64"
+	case string:
+		return "string"
+	case bool:
+		return "bool"
+	case map[string]interface{}:
+		return "struct"
+	default:
+		return "interface{}"
 	}
 }
 
@@ -46,8 +76,8 @@ func ToCamelCase(input string) string {
 }
 
 // guessType returns a string representing the Go type of the value.
-func guessType(value interface{}) string {
-	switch value.(type) {
+func guessType[T any](value T) string {
+	switch any(value).(type) {
 	case string:
 		return "string"
 	case float64:
@@ -58,13 +88,17 @@ func guessType(value interface{}) string {
 		return "map[string]interface{}"
 	case []interface{}:
 		return "[]interface{}"
+	case int, int8, int16, int32, int64:
+		return "int"
+	case uint, uint8, uint16, uint32, uint64:
+		return "uint"
 	default:
 		return "interface{}"
 	}
 }
 
 // PrintStruct prints the struct in a Go source file format.
-func PrintStruct(s Struct) {
+func PrintStruct[T any](s Struct[T]) {
 	fmt.Printf("type %s struct {\n", s.Name)
 	for _, field := range s.Fields {
 		fmt.Printf("\t%s %s %s\n", field.Name, field.Type, field.Tag)
@@ -115,7 +149,7 @@ func main() {
 	}
 }
 
-func formatStruct(s Struct) string {
+func formatStruct[T any](s Struct[T]) string {
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("type %s struct {\n", s.Name))
 	for _, field := range s.Fields {
